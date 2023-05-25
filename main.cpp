@@ -10,8 +10,9 @@ class GipfEngine
 {
     // size, number of pieces to trigger collection, number of white pieces, number of black pieces
     int parameters[4];
+    int black_reserve, white_reserve;
+    char turn;
     // board representation
-    vector<vector<int>> board;
 
 public:
     enum field
@@ -21,6 +22,20 @@ public:
         black,
     };
 
+    enum direction
+    {
+        up_right,
+        right,
+        down_right,
+        down_left,
+        left,
+        up_left,
+    };
+
+private:
+    vector<vector<field>> board;
+
+public:
     GipfEngine(int size, int collection, int white, int black)
     {
         size++;
@@ -28,12 +43,14 @@ public:
         parameters[1] = collection;
         parameters[2] = white;
         parameters[3] = black;
+        black_reserve = white_reserve = collection;
+        turn = 'W';
         for (int i = 0; i < size * 2 - 1; i++)
         {
-            board.push_back(vector<int>());
+            board.push_back(vector<field>());
             for (int j = 0; j < size; j++)
             {
-                board[i].push_back(0);
+                board[i].push_back(field::empty);
             }
             if (i < parameters[0] - 1)
             {
@@ -46,6 +63,45 @@ public:
         }
     }
 
+    int *move(int x, int y, direction direction)
+    {
+        if (x >= this->size())
+        {
+            if (direction == down_right or direction == right)
+            {
+                y--;
+            }
+            else if ((direction == left and x != this->size()) or (direction == up_left and x != this->size()))
+            {
+                y++;
+            }
+        }
+        switch (direction)
+        {
+        case up_right:
+            y++;
+            break;
+        case right:
+            x++;
+            y++;
+            break;
+        case down_right:
+            x++;
+            break;
+        case down_left:
+            y--;
+            break;
+        case left:
+            x--;
+            y--;
+            break;
+        case up_left:
+            x--;
+            break;
+        }
+        return new int[2]{x, y};
+    }
+
     void resize(int size)
     {
         size++;
@@ -53,10 +109,10 @@ public:
         board.clear();
         for (int i = 0; i < (size * 2) - 1; i++)
         {
-            board.push_back(vector<int>());
+            board.push_back(vector<field>());
             for (int j = 0; j < size; j++)
             {
-                board[i].push_back(0);
+                board[i].push_back(field::empty);
             }
             if (i < parameters[0] - 1)
             {
@@ -81,7 +137,7 @@ public:
         board[x][y] = value;
     }
 
-    int size(bool borders = false)
+    int size(bool borders = false) const
     {
         if (borders)
         {
@@ -96,8 +152,53 @@ public:
         return x == 0 or x == board.size() - 1 or y == 0 or y == board[x].size() - 1;
     }
 
-    void printBoard(bool borders = false)
+    bool is_neardy(int x1, int y1, int x2, int y2)
     {
+        if (x1 == x2 and abs(y1 - y2) == 1)
+        {
+            return true;
+        }
+        if (abs(x1 - x2) == 1)
+        {
+            if (y1 == y2)
+            {
+                return true;
+            }
+            else if (x1 == this->size())
+            {
+                // dioganal check
+                if (y1 == y2 + 1)
+                {
+                    return true;
+                }
+                return false;
+            }
+            else if (x1 < this->size())
+            {
+                // left border
+                if (y2 == y1 + (x2 - x1))
+                {
+                    return true;
+                }
+                return false;
+            }
+            else
+            {
+                // right border
+                if (y2 == y1 - (x2 - x1))
+                {
+                    return true;
+                }
+                return false;
+            }
+        }
+        return false;
+    }
+
+    void printBoard()
+    {
+        cout << this->size() << " " << parameters[1] << " " << parameters[2] << " " << parameters[3] << endl;
+        cout << white_reserve << " " << black_reserve << " " << turn << endl;
         int end_y = this->size() * 2 - 2, end_x = this->size() - 1;
         for (int row = 0; row < this->size() * 2 - 1; row++)
         {
@@ -116,8 +217,7 @@ public:
                 // {
                 //     cout << "+ ";
                 // }
-
-                switch (board[x+1][start_y+1])
+                switch (board[x + 1][start_y + 1])
                 {
                 case empty:
                     cout << "_ ";
@@ -147,21 +247,20 @@ public:
     void scanBoard()
     {
         bool correct_len = true;
-        int black, white, len = 0;
-        char symbol, turn;
+        char symbol;
         string input;
         cin >> parameters[0] >> parameters[1] >> parameters[2] >> parameters[3];
         this->resize(parameters[0]);
-        cin >> white >> black >> turn;
+        cin >> white_reserve >> black_reserve >> turn;
+        int white_count = white_reserve, black_count = black_reserve;
         int end_y = this->size() * 2 - 2, end_x = this->size() - 1;
         getline(cin, input);
         for (int row = 0; row < this->size() * 2 - 1; row++)
         {
             int start_y = max(0, this->size() - row - 1);
             int start_x = max(0, row - this->size() + 1);
-
             getline(cin, input);
-            len = 0;
+            int len = 0;
             for (int i = 0; i < input.length(); i++)
             {
                 if (input[i] != ' ')
@@ -189,15 +288,15 @@ public:
                 switch (symbol)
                 {
                 case '_':
-                    board[x+1][start_y+1] = empty;
+                    board[x + 1][start_y + 1] = empty;
                     break;
                 case 'W':
-                    board[x+1][start_y+1] = field::white;
-                    white++;
+                    board[x + 1][start_y + 1] = field::white;
+                    white_count++;
                     break;
                 case 'B':
-                    board[x][start_y] = field::black;
-                    black++;
+                    board[x + 1][start_y + 1] = field::black;
+                    black_count++;
                     break;
                 }
                 if (start_y < end_y)
@@ -205,31 +304,6 @@ public:
                     start_y++;
                 }
             }
-
-            // for (int x = start_x; x <= end_x; x++)
-            // {
-            //     // char character = static_cast<char>(x+97);
-            //     // cout << character << start_y+1 << " ";
-            //     cin >> symbol;
-            //     switch (symbol)
-            //     {
-            //     case '_':
-            //         board[x][start_y] = empty;
-            //         break;
-            //     case 'W':
-            //         board[x][start_y] = field::white;
-            //         white++;
-            //         break;
-            //     case 'B':
-            //         board[x][start_y] = field::black;
-            //         black++;
-            //         break;
-            //     }
-            //     if (start_y < end_y)
-            //     {
-            //         start_y++;
-            //     }
-            // }
             if (row < this->size() - 1)
             {
                 end_x++;
@@ -241,12 +315,12 @@ public:
             cout << "WRONG_BOARD_ROW_LENGTH" << endl;
             return;
         }
-        if (white != parameters[2])
+        if (white_count != parameters[2])
         {
             cout << "WRONG_WHITE_PAWNS_NUMBER" << endl;
             return;
         }
-        if (black != parameters[3])
+        if (black_count != parameters[3])
         {
             cout << "WRONG_BLACK_PAWNS_NUMBER" << endl;
             return;
@@ -257,7 +331,7 @@ public:
 
     void doMove(int from_x, int from_y, int to_x, int to_y)
     {
-        cout << from_x << " " << from_y << " " << to_x << " " << to_y << endl;
+        // cout << from_x << " " << from_y << " " << to_x << " " << to_y << endl;
         if (from_x < 0 || from_x >= board.size() || from_y < 0 || from_y >= this->board[from_x].size())
         {
             char character = static_cast<char>(from_x + 97);
@@ -270,6 +344,30 @@ public:
             cout << "BAD_MOVE_" << character << to_y + 1 << "_IS_WRONG_INDEX" << endl;
             return;
         }
+        if (!is_border(from_x, from_y))
+        {
+            char character = static_cast<char>(from_x + 97);
+            cout << "BAD_MOVE_" << character << from_y + 1 << "_IS_WRONG_STARTING_FIELD" << endl;
+            return;
+        }
+        if (!is_neardy(from_x, from_y, to_x, to_y))
+        {
+            cout << "UNKNOWN_MOVE_DIRECTION" << endl;
+            return;
+        }
+        switch (turn)
+        {
+        case 'B':
+            black_reserve--;
+            turn = 'W';
+            break;
+        case 'W':
+            white_reserve--;
+            turn = 'B';
+            break;
+        }
+
+        cout << "MOVE_COMMITTED" << endl;
     }
 
     void _test()
@@ -283,12 +381,43 @@ public:
             cout << endl;
         }
     }
+
+    bool move_stones(int x, int y, direction direction, field stone)
+    {
+        if (is_border(x, y))
+        {
+            return false;
+        }
+        if (board[x][y] == field::empty)
+        {
+            board[x][y] = stone;
+            return true;
+        }
+        else
+        {
+            int *new_coords = move(x, y, direction);
+            if (move_stones(new_coords[0], new_coords[1], direction, board[x][y])) {
+                board[x][y] = stone;
+                return true;
+            }
+            else {
+                return false;
+            }
+        }
+    }
 };
 
 int main(int, char **)
 {
     string input;
     GipfEngine gipf(4, 4, 15, 15);
+    // gipf.set('b', 2, GipfEngine::field::black);
+    // gipf.set('c', 3, GipfEngine::field::black);
+    // gipf.set('d', 4, GipfEngine::field::black);
+    // gipf.printBoard();
+    // cout << gipf.move_stones(1, 1, GipfEngine::direction::right, GipfEngine::field::white) << endl;
+
+    // gipf.printBoard();
 
     while (cin >> input)
     {
@@ -306,5 +435,10 @@ int main(int, char **)
             to_y = input[4] - 49;
             gipf.doMove(from_x, from_y, to_x, to_y);
         }
+        else if (input == "PRINT_GAME_BOARD")
+        {
+            gipf.printBoard();
+        }
+        cout << endl;
     }
 }
