@@ -2,6 +2,7 @@
 #include <vector>
 #include <algorithm>
 #include <iomanip>
+#include <queue>
 #include <string>
 
 using namespace std;
@@ -315,18 +316,244 @@ public:
             cout << "WRONG_BOARD_ROW_LENGTH" << endl;
             return;
         }
-        if (white_count != parameters[2])
+        if (white_count > parameters[2])
         {
             cout << "WRONG_WHITE_PAWNS_NUMBER" << endl;
             return;
         }
-        if (black_count != parameters[3])
+        if (black_count > parameters[3])
         {
             cout << "WRONG_BLACK_PAWNS_NUMBER" << endl;
             return;
         }
+        int sequenses = this->count_sequence();
+        if (sequenses != 0)
+        {
+            cout << "ERROR_FOUND_" << sequenses;
+            if (sequenses > 1)
+            {
+                cout << "_ROWS_OF_LENGTH_K" << endl;
+            }
+            else
+            {
+                cout << "_ROW_OF_LENGTH_K" << endl;
+            }
+            return;
+        }
 
         cout << "BOARD_STATE_OK" << endl;
+    }
+
+    bool is_sequence(int x, int y, direction direction, field prev_field, int white_len = 0, int black_len = 0)
+    {
+        // char character = static_cast<char>(x + 97);
+        // cout << character << y + 1 << " " << white_len << " " << black_len << endl;
+        if (black_len >= parameters[1] or white_len >= parameters[1])
+        {
+            return true;
+        }
+        if (is_border(x, y))
+        {
+            return false;
+        }
+        if (board[x][y] == prev_field)
+        {
+            if (board[x][y] == field::white)
+            {
+                white_len++;
+            }
+            else if (board[x][y] == field::black)
+            {
+                black_len++;
+            }
+        }
+        else
+        {
+            white_len = 1;
+            black_len = 1;
+        }
+        int *new_pos = move(x, y, direction);
+        int new_x = new_pos[0], new_y = new_pos[1];
+        delete[] new_pos;
+        return is_sequence(new_x, new_y, direction, board[x][y], white_len, black_len);
+    }
+
+    direction get_direction(int from_x, int from_y, int to_x, int to_y)
+    {
+        int *new_pos;
+        for (int i = 0; i < 6; i++)
+        {
+            new_pos = move(from_x, from_y, (direction)i);
+            if (new_pos[0] == to_x && new_pos[1] == to_y)
+            {
+                delete[] new_pos;
+                return (direction)i;
+            }
+        }
+        delete[] new_pos;
+        throw "Wrong direction";
+        return (direction)0;
+    }
+
+    void erase(int x, int y, direction direction)
+    {
+        int *new_pos;
+        while (!is_border(x, y))
+        {
+            // cout << "ERASE " << static_cast<char>(x + 97) << y + 1 << endl;
+            new_pos = move(x, y, direction);
+            x = new_pos[0];
+            y = new_pos[1];
+            delete[] new_pos;
+            if (board[x][y] == field::empty)
+            {
+                break;
+            }
+            board[x][y] = field::empty;
+        }
+    }
+
+    void take_off(int x, int y, direction direction)
+    {
+        queue<pair<int, int>> q;
+        field prev_field = board[x][y];
+        int *new_pos;
+        while (!is_border(x, y))
+        {
+            if (board[x][y] == prev_field)
+            {
+                q.push(make_pair(x, y));
+            }
+            else
+            {
+                if (q.size() >= parameters[1])
+                {
+                    int _x = q.front().first, _y = q.front().second;
+                    int opposite_direction = (((int)direction) + 3) % 6;
+                    this->erase(_x, _y, (GipfEngine::direction)opposite_direction);
+                    this->erase(q.back().first, q.back().second, direction);
+                    while (!q.empty())
+                    {
+                        _x = q.front().first, _y = q.front().second;
+                        if (board[_x][_y] == field::white)
+                        {
+                            white_reserve++;
+                            // cout << "add points " << static_cast<char>(_x + 97) << _y + 1 << endl;
+                        }
+                        else if (board[_x][_y] == field::black)
+                        {
+                            black_reserve++;
+                        }
+                        board[_x][_y] = field::empty;
+                        q.pop();
+                    }
+                }
+                else
+                {
+                    while (!q.empty())
+                    {
+                        q.pop();
+                    }
+                    q.push(make_pair(x, y));
+                }
+            }
+            prev_field = board[x][y];
+            new_pos = move(x, y, direction);
+            x = new_pos[0];
+            y = new_pos[1];
+            delete[] new_pos;
+        }
+        if (q.size() >= parameters[1])
+        {
+            int _x = q.front().first, _y = q.front().second;
+            int opposite_direction = (((int)direction) + 3) % 6;
+            this->erase(_x, _y, (GipfEngine::direction)opposite_direction);
+            this->erase(q.back().first, q.back().second, direction);
+            while (!q.empty())
+            {
+                _x = q.front().first, _y = q.front().second;
+                if (board[_x][_y] == field::white)
+                {
+                    white_reserve++;
+                    // cout << "add points " << static_cast<char>(_x + 97) << _y + 1 << endl;
+                }
+                else if (board[_x][_y] == field::black)
+                {
+                    black_reserve++;
+                }
+                board[_x][_y] = field::empty;
+                q.pop();
+            }
+        }
+    }
+
+    int count_sequence(bool to_take_off = false)
+    {
+        int count = 0;
+        for (int i = 0; i < 3; i++)
+        {
+            if (is_sequence(1, 1, (direction)i, board[1][1]))
+            {
+                count++;
+                if (to_take_off)
+                {
+                    take_off(1, 1, (direction)i);
+                }
+            }
+        }
+        // left up diagonal
+        for (int y = 2; y < board[1].size() - 1; y++)
+        {
+            for (int i = 1; i < 3; i++)
+            {
+                if (is_sequence(1, y, (direction)i, board[1][y]))
+                {
+                    count++;
+                    if (to_take_off)
+                    {
+                        take_off(1, y, (direction)i);
+                    }
+                }
+            }
+            // char symbol = static_cast<char>(1 + 97);
+            // cout << symbol << y + 1 << endl;
+        }
+
+        int x = 2, y = board[2].size() - 2;
+        while (!is_border(x, y))
+        {
+            // char symbol = static_cast<char>(x + 97);
+            // cout << symbol << y << endl;
+            if (is_sequence(x, y, down_right, board[x][y]))
+            {
+                count++;
+                if (to_take_off)
+                {
+                    take_off(x, y, down_right);
+                }
+            }
+            x++;
+            y++;
+        }
+
+        for (int x = 2; x < board.size() - 1; x++)
+        {
+            if (is_sequence(x, 1, up_right, board[x][1]))
+            {
+                count++;
+                if (to_take_off)
+                {
+                    take_off(x, 1, up_right);
+                }
+            }
+            // if (x == this->size())
+            // {
+            //     cout << "---------" << endl;
+            // }
+            // char symbol = static_cast<char>(x + 97);
+            // cout << symbol << 2 << endl;
+        }
+        return count;
     }
 
     void doMove(int from_x, int from_y, int to_x, int to_y)
@@ -355,17 +582,41 @@ public:
             cout << "UNKNOWN_MOVE_DIRECTION" << endl;
             return;
         }
+        if (is_border(to_x, to_y))
+        {
+            char character = static_cast<char>(to_x + 97);
+            cout << "BAD_MOVE_" << character << to_y + 1 << "_IS_WRONG_DESTINATION_FIELD" << endl;
+            return;
+        }
+        direction direction = get_direction(from_x, from_y, to_x, to_y);
         switch (turn)
         {
         case 'B':
-            black_reserve--;
-            turn = 'W';
+            if (this->move_stones(to_x, to_y, direction, field::black))
+            {
+                black_reserve--;
+                turn = 'W';
+            }
+            else
+            {
+                cout << "BAD_MOVE_ROW_IS_FULL" << endl;
+                return;
+            }
             break;
         case 'W':
-            white_reserve--;
-            turn = 'B';
+            if (this->move_stones(to_x, to_y, direction, field::white))
+            {
+                white_reserve--;
+                turn = 'B';
+            }
+            else
+            {
+                cout << "BAD_MOVE_ROW_IS_FULL" << endl;
+                return;
+            }
             break;
         }
+        this->count_sequence(true);
 
         cout << "MOVE_COMMITTED" << endl;
     }
@@ -396,11 +647,16 @@ public:
         else
         {
             int *new_coords = move(x, y, direction);
-            if (move_stones(new_coords[0], new_coords[1], direction, board[x][y])) {
+            int new_x = new_coords[0];
+            int new_y = new_coords[1];
+            delete[] new_coords;
+            if (move_stones(new_x, new_y, direction, board[x][y]))
+            {
                 board[x][y] = stone;
                 return true;
             }
-            else {
+            else
+            {
                 return false;
             }
         }
@@ -411,13 +667,6 @@ int main(int, char **)
 {
     string input;
     GipfEngine gipf(4, 4, 15, 15);
-    // gipf.set('b', 2, GipfEngine::field::black);
-    // gipf.set('c', 3, GipfEngine::field::black);
-    // gipf.set('d', 4, GipfEngine::field::black);
-    // gipf.printBoard();
-    // cout << gipf.move_stones(1, 1, GipfEngine::direction::right, GipfEngine::field::white) << endl;
-
-    // gipf.printBoard();
 
     while (cin >> input)
     {
