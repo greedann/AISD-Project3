@@ -381,18 +381,38 @@ public:
     direction get_direction(int from_x, int from_y, int to_x, int to_y)
     {
         int *new_pos;
-        for (int i = 0; i < 6; i++)
+        if (is_neardy(from_x, from_y, to_x, to_y))
         {
-            new_pos = move(from_x, from_y, (direction)i);
-            if (new_pos[0] == to_x && new_pos[1] == to_y)
+            for (int i = 0; i < 6; i++)
             {
+                new_pos = move(from_x, from_y, (direction)i);
+                if (new_pos[0] == to_x && new_pos[1] == to_y)
+                {
+                    delete[] new_pos;
+                    return (direction)i;
+                }
                 delete[] new_pos;
-                return (direction)i;
             }
         }
-        delete[] new_pos;
+        else
+        {
+            for (int i = 0; i < 6; i++)
+            {
+                int current_x = from_x, current_y = from_y;
+                while (!is_border(current_x, current_y))
+                {
+                    if (current_x == to_x && current_y == to_y)
+                    {
+                        return (direction)i;
+                    }
+                    new_pos = move(current_x, current_y, (direction)i);
+                    current_x = new_pos[0];
+                    current_y = new_pos[1];
+                    delete[] new_pos;
+                }
+            }
+        }
         throw "Wrong direction";
-        return (direction)0;
     }
 
     void erase(int x, int y, direction direction)
@@ -536,7 +556,7 @@ public:
             y++;
         }
 
-        for (int x = 2; x < board.size() - 1; x++)
+        for (x = 2; x < board.size() - 1; x++)
         {
             if (is_sequence(x, 1, up_right, board[x][1]))
             {
@@ -556,37 +576,37 @@ public:
         return count;
     }
 
-    void doMove(int from_x, int from_y, int to_x, int to_y)
+    bool doMove(int from_x, int from_y, int to_x, int to_y)
     {
         // cout << from_x << " " << from_y << " " << to_x << " " << to_y << endl;
         if (from_x < 0 || from_x >= board.size() || from_y < 0 || from_y >= this->board[from_x].size())
         {
             char character = static_cast<char>(from_x + 97);
             cout << "BAD_MOVE_" << character << from_y + 1 << "_IS_WRONG_INDEX" << endl;
-            return;
+            return false;
         }
         if (to_x < 0 || to_x >= board.size() || to_y < 0 || to_y >= this->board[to_x].size())
         {
             char character = static_cast<char>(to_x + 97);
             cout << "BAD_MOVE_" << character << to_y + 1 << "_IS_WRONG_INDEX" << endl;
-            return;
+            return false;
         }
         if (!is_border(from_x, from_y))
         {
             char character = static_cast<char>(from_x + 97);
             cout << "BAD_MOVE_" << character << from_y + 1 << "_IS_WRONG_STARTING_FIELD" << endl;
-            return;
+            return false;
         }
         if (!is_neardy(from_x, from_y, to_x, to_y))
         {
             cout << "UNKNOWN_MOVE_DIRECTION" << endl;
-            return;
+            return false;
         }
         if (is_border(to_x, to_y))
         {
             char character = static_cast<char>(to_x + 97);
             cout << "BAD_MOVE_" << character << to_y + 1 << "_IS_WRONG_DESTINATION_FIELD" << endl;
-            return;
+            return false;
         }
         direction direction = get_direction(from_x, from_y, to_x, to_y);
         switch (turn)
@@ -600,7 +620,7 @@ public:
             else
             {
                 cout << "BAD_MOVE_ROW_IS_FULL" << endl;
-                return;
+                return false;
             }
             break;
         case 'W':
@@ -612,13 +632,11 @@ public:
             else
             {
                 cout << "BAD_MOVE_ROW_IS_FULL" << endl;
-                return;
+                return false;
             }
             break;
         }
-        this->count_sequence(true);
-
-        cout << "MOVE_COMMITTED" << endl;
+        return true;
     }
 
     void _test()
@@ -661,6 +679,24 @@ public:
             }
         }
     }
+
+    bool priority_erase(int from_x, int from_y, int to_x, int to_y, char color)
+    {
+        field stone = (color == 'B') ? field::black : field::white;
+        if (board[from_x][from_y] != stone or board[to_x][to_y] != stone)
+        {
+            cout << "WRONG_COLOR_OF_CHOSEN_ROW" << endl;
+            return false;
+        }
+        if (is_neardy(from_x, from_y, to_x, to_y))
+        {
+            cout << "WRONG_INDEX_OF_CHOSEN_ROW" << endl;
+            return false;
+        }
+        direction dir = get_direction(from_x, from_y, to_x, to_y);
+        take_off(from_x, from_y, dir);        
+        return true;
+    }
 };
 
 int main(int, char **)
@@ -668,21 +704,36 @@ int main(int, char **)
     string input;
     GipfEngine gipf(4, 4, 15, 15);
 
-    while (cin >> input)
+    while (getline(cin, input))
     {
         if (input == "LOAD_GAME_BOARD")
         {
             gipf.scanBoard();
         }
-        else if (input == "DO_MOVE")
+        else if (input.find("DO_MOVE") != string::npos)
         {
             int from_x, from_y, to_x, to_y;
-            cin >> input;
-            from_x = input[0] - 97;
-            from_y = input[1] - 49;
-            to_x = input[3] - 97;
-            to_y = input[4] - 49;
-            gipf.doMove(from_x, from_y, to_x, to_y);
+            bool success;
+            // cin >> input;
+            from_x = input[8] - 97;
+            from_y = input[9] - 49;
+            to_x = input[11] - 97;
+            to_y = input[12] - 49;
+            success = gipf.doMove(from_x, from_y, to_x, to_y);
+            if (input.find(':') != string::npos)
+            {
+                char color = input[14] - 32;
+                from_x = input[17] - 97;
+                from_y = input[18] - 49;
+                to_x = input[20] - 97;
+                to_y = input[21] - 49;
+                success = gipf.priority_erase(from_x, from_y, to_x, to_y, color);
+            }
+            if (success)
+            {
+                cout << "MOVE_COMMITTED" << endl;
+            }
+            gipf.count_sequence(true);
         }
         else if (input == "PRINT_GAME_BOARD")
         {
