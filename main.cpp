@@ -13,6 +13,7 @@ class GipfEngine
     int parameters[4];
     int black_reserve, white_reserve;
     char turn;
+    bool is_empty = true;
     // board representation
 
 public:
@@ -198,6 +199,11 @@ public:
 
     void printBoard()
     {
+        if (is_empty)
+        {
+            cout << "EMPTY_BOARD" << endl;
+            return;
+        }
         cout << this->size() << " " << parameters[1] << " " << parameters[2] << " " << parameters[3] << endl;
         cout << white_reserve << " " << black_reserve << " " << turn << endl;
         int end_y = this->size() * 2 - 2, end_x = this->size() - 1;
@@ -247,6 +253,7 @@ public:
 
     void scanBoard()
     {
+        is_empty = true;
         bool correct_len = true;
         char symbol;
         string input;
@@ -340,7 +347,7 @@ public:
             }
             return;
         }
-
+        is_empty = false;
         cout << "BOARD_STATE_OK" << endl;
     }
 
