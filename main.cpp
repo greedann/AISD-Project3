@@ -7,6 +7,11 @@
 
 using namespace std;
 
+struct Move
+{
+    int from_x, from_y, to_x, to_y;
+    Move(int from_x, int from_y, int to_x, int to_y) : from_x(from_x), from_y(from_y), to_x(to_x), to_y(to_y) {}
+};
 class GipfEngine
 {
     // size, number of pieces to trigger collection, number of white pieces, number of black pieces
@@ -14,7 +19,6 @@ class GipfEngine
     int black_reserve, white_reserve;
     char turn;
     bool is_empty = true;
-    // board representation
 
 public:
     enum field
@@ -150,7 +154,6 @@ public:
 
     bool is_border(int x, int y)
     {
-
         return x == 0 or x == board.size() - 1 or y == 0 or y == board[x].size() - 1;
     }
 
@@ -218,12 +221,6 @@ public:
 
             for (int x = start_x; x <= end_x; x++)
             {
-                // char character = static_cast<char>(x+97);
-                // cout << character << start_y+1 << " ";
-                // if (borders and is_border(x, start_y))
-                // {
-                //     cout << "+ ";
-                // }
                 switch (board[x + 1][start_y + 1])
                 {
                 case empty:
@@ -249,6 +246,58 @@ public:
             }
             end_y--;
         }
+    }
+
+    vector<Move> get_moves()
+    {
+        vector<Move> moves;
+        int x = 0, y = 0;
+        y = board[0].size() - 1;
+        moves.push_back(Move(0, 0, 1, 1)); // left edge
+        moves.push_back(Move(0, y, 1, y)); // left up edge
+
+        x = this->size();
+        y = board[x].size() - 1;
+        moves.push_back(Move(x, y, x, y - 1)); // right up edge
+        moves.push_back(Move(x, 0, x, 1));     // left down edge
+
+        x = board.size() - 1;
+        y = board[x].size() - 1;
+        moves.push_back(Move(x, 0, x - 1, 1)); // right down edge
+        moves.push_back(Move(x, y, x - 1, y)); // right up edge
+
+        for (y = 1; y < board[0].size() - 1; y++)
+        {
+            moves.push_back(Move(0, y, 1, y)); // left up
+            moves.push_back(Move(0, y, 1, y + 1));
+
+            moves.push_back(Move(board.size() - 1, y, board.size() - 2, y)); // right down
+            moves.push_back(Move(board.size() - 1, y, board.size() - 2, y + 1));
+        }
+
+        for (x = 1; x < this->size(); x++)
+        {
+            // up
+            y = board[x].size() - 1;
+            moves.push_back(Move(x, y, x + 1, y));
+            moves.push_back(Move(x, y, x, y - 1));
+
+            // down
+            int down_x = board.size() - x - 1;
+            moves.push_back(Move(down_x, 0, down_x, 1));
+            moves.push_back(Move(down_x, 0, down_x - 1, 1));
+
+            // left down
+            moves.push_back(Move(x, 0, x + 1, 1));
+            moves.push_back(Move(x, 0, x, 1));
+
+            // right up
+            y = board[x].size() - 1;
+            moves.push_back(Move(down_x, y, down_x - 1, y));
+            moves.push_back(Move(down_x, y, down_x, y - 1));
+        }
+
+        return moves;
     }
 
     void scanBoard()
@@ -353,8 +402,6 @@ public:
 
     bool is_sequence(int x, int y, direction direction, field prev_field, int white_len = 0, int black_len = 0)
     {
-        // char character = static_cast<char>(x + 97);
-        // cout << character << y + 1 << " " << white_len << " " << black_len << endl;
         if (black_len >= parameters[1] or white_len >= parameters[1])
         {
             return true;
@@ -427,7 +474,6 @@ public:
         int *new_pos;
         while (!is_border(x, y))
         {
-            // cout << "ERASE " << static_cast<char>(x + 97) << y + 1 << endl;
             new_pos = move(x, y, direction);
             x = new_pos[0];
             y = new_pos[1];
@@ -465,7 +511,6 @@ public:
                         if (board[_x][_y] == field::white)
                         {
                             white_reserve++;
-                            // cout << "add points " << static_cast<char>(_x + 97) << _y + 1 << endl;
                         }
                         else if (board[_x][_y] == field::black)
                         {
@@ -502,7 +547,6 @@ public:
                 if (board[_x][_y] == field::white)
                 {
                     white_reserve++;
-                    // cout << "add points " << static_cast<char>(_x + 97) << _y + 1 << endl;
                 }
                 else if (board[_x][_y] == field::black)
                 {
@@ -514,7 +558,7 @@ public:
         }
     }
 
-    int count_sequence(bool to_take_off = false)
+    int count_sequence(bool to_take_off = false, int to_ignore = 1)
     {
         int count = 0;
         for (int i = 0; i < 3; i++)
@@ -522,7 +566,8 @@ public:
             if (is_sequence(1, 1, (direction)i, board[1][1]))
             {
                 count++;
-                if (to_take_off)
+                to_ignore--;
+                if (to_take_off and to_ignore <= 0)
                 {
                     take_off(1, 1, (direction)i);
                 }
@@ -536,25 +581,24 @@ public:
                 if (is_sequence(1, y, (direction)i, board[1][y]))
                 {
                     count++;
-                    if (to_take_off)
+                    to_ignore--;
+                    if (to_take_off and to_ignore <= 0)
                     {
                         take_off(1, y, (direction)i);
                     }
                 }
             }
-            // char symbol = static_cast<char>(1 + 97);
-            // cout << symbol << y + 1 << endl;
         }
 
+        // right up diagonal
         int x = 2, y = board[2].size() - 2;
         while (!is_border(x, y))
         {
-            // char symbol = static_cast<char>(x + 97);
-            // cout << symbol << y << endl;
             if (is_sequence(x, y, down_right, board[x][y]))
             {
                 count++;
-                if (to_take_off)
+                to_ignore--;
+                if (to_take_off and to_ignore <= 0)
                 {
                     take_off(x, y, down_right);
                 }
@@ -563,56 +607,66 @@ public:
             y++;
         }
 
+        // right down diagonal
         for (x = 2; x < board.size() - 1; x++)
         {
             if (is_sequence(x, 1, up_right, board[x][1]))
             {
                 count++;
-                if (to_take_off)
+                to_ignore--;
+                if (to_take_off and to_ignore <= 0)
                 {
                     take_off(x, 1, up_right);
                 }
             }
-            // if (x == this->size())
-            // {
-            //     cout << "---------" << endl;
-            // }
-            // char symbol = static_cast<char>(x + 97);
-            // cout << symbol << 2 << endl;
         }
         return count;
     }
 
-    bool doMove(int from_x, int from_y, int to_x, int to_y)
+    bool doMove(int from_x, int from_y, int to_x, int to_y, bool to_print = true)
     {
-        // cout << from_x << " " << from_y << " " << to_x << " " << to_y << endl;
         if (from_x < 0 || from_x >= board.size() || from_y < 0 || from_y >= this->board[from_x].size())
         {
-            char character = static_cast<char>(from_x + 97);
-            cout << "BAD_MOVE_" << character << from_y + 1 << "_IS_WRONG_INDEX" << endl;
+            if (to_print)
+            {
+                char character = static_cast<char>(from_x + 97);
+                cout << "BAD_MOVE_" << character << from_y + 1 << "_IS_WRONG_INDEX" << endl;
+            }
             return false;
         }
         if (to_x < 0 || to_x >= board.size() || to_y < 0 || to_y >= this->board[to_x].size())
         {
-            char character = static_cast<char>(to_x + 97);
-            cout << "BAD_MOVE_" << character << to_y + 1 << "_IS_WRONG_INDEX" << endl;
+            if (to_print)
+            {
+                char character = static_cast<char>(to_x + 97);
+                cout << "BAD_MOVE_" << character << to_y + 1 << "_IS_WRONG_INDEX" << endl;
+            }
             return false;
         }
         if (!is_border(from_x, from_y))
         {
-            char character = static_cast<char>(from_x + 97);
-            cout << "BAD_MOVE_" << character << from_y + 1 << "_IS_WRONG_STARTING_FIELD" << endl;
+            if (to_print)
+            {
+                char character = static_cast<char>(from_x + 97);
+                cout << "BAD_MOVE_" << character << from_y + 1 << "_IS_WRONG_STARTING_FIELD" << endl;
+            }
             return false;
         }
         if (!is_neardy(from_x, from_y, to_x, to_y))
         {
-            cout << "UNKNOWN_MOVE_DIRECTION" << endl;
+            if (to_print)
+            {
+                cout << "UNKNOWN_MOVE_DIRECTION" << endl;
+            }
             return false;
         }
         if (is_border(to_x, to_y))
         {
-            char character = static_cast<char>(to_x + 97);
-            cout << "BAD_MOVE_" << character << to_y + 1 << "_IS_WRONG_DESTINATION_FIELD" << endl;
+            if (to_print)
+            {
+                char character = static_cast<char>(to_x + 97);
+                cout << "BAD_MOVE_" << character << to_y + 1 << "_IS_WRONG_DESTINATION_FIELD" << endl;
+            }
             return false;
         }
         direction direction = get_direction(from_x, from_y, to_x, to_y);
@@ -626,7 +680,10 @@ public:
             }
             else
             {
-                cout << "BAD_MOVE_ROW_IS_FULL" << endl;
+                if (to_print)
+                {
+                    cout << "BAD_MOVE_ROW_IS_FULL" << endl;
+                }
                 return false;
             }
             break;
@@ -638,24 +695,15 @@ public:
             }
             else
             {
-                cout << "BAD_MOVE_ROW_IS_FULL" << endl;
+                if (to_print)
+                {
+                    cout << "BAD_MOVE_ROW_IS_FULL" << endl;
+                }
                 return false;
             }
             break;
         }
         return true;
-    }
-
-    void _test()
-    {
-        for (int i = 0; i < board.size(); i++)
-        {
-            for (int j = 0; j < board[i].size(); j++)
-            {
-                cout << board[i][j] << " ";
-            }
-            cout << endl;
-        }
     }
 
     bool move_stones(int x, int y, direction direction, field stone)
@@ -701,15 +749,126 @@ public:
             return false;
         }
         direction dir = get_direction(from_x, from_y, to_x, to_y);
-        take_off(from_x, from_y, dir);        
+        take_off(from_x, from_y, dir);
         return true;
+    }
+
+    bool is_game_over()
+    {
+        if (black_reserve == 0 or white_reserve == 0)
+        {
+            return true;
+        }
+        for (int x = 1; x < board.size() - 1; x++)
+        {
+            for (int y = 1; y < board[x].size() - 1; y++)
+            {
+                if (board[x][y] == field::empty)
+                {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    string get_winner() const
+    {
+        if (black_reserve == 0)
+        {
+            return "WHITE";
+        }
+        else if (white_reserve == 0)
+        {
+            return "BLACK";
+        }
+        else if (turn == 'B')
+        {
+            return "WHITE";
+        }
+        else
+        {
+            return "BLACK";
+        }
+    }
+
+    int count_posible_moves(bool check_is_game_over = false, bool print_moves = false)
+    {
+        vector<vector<field>> start_board, after_move_board;
+        vector<vector<vector<field>>> unique_boards;
+        vector<Move> unique_moves;
+        char start_turn;
+        int black = black_reserve, white = white_reserve,after_move_white,after_move_black;
+        start_board = board;
+        start_turn = turn;
+        auto moves = get_moves();
+        for (auto move : moves)
+        {
+            if (doMove(move.from_x, move.from_y, move.to_x, move.to_y, false))
+            {
+                after_move_board = board;
+                after_move_white = white_reserve;
+                after_move_black = black_reserve;
+                int n = this->count_sequence();
+                if (n == 0)
+                    n++;
+                for (int i = 0; i < n; i++)
+                {
+                    if (i > 0)
+                        board = after_move_board;
+                    this->count_sequence(true, i + 1);
+                    this->count_sequence(true);
+                    if (find(unique_boards.begin(), unique_boards.end(), board) == unique_boards.end())
+                    {
+                        if (check_is_game_over && is_game_over())
+                        {
+                            if (print_moves)
+                            {
+                                printBoard();
+                            }
+                            turn = start_turn;
+                            board = start_board;
+                            black_reserve = after_move_black;
+                            white_reserve = after_move_white;
+                            return 1;
+                        }
+                        if (print_moves)
+                        {
+                            printBoard();
+                            cout << endl;
+                        }
+                        unique_boards.push_back(board);
+                        unique_moves.push_back(move);
+                    }
+                }
+            }
+            turn = start_turn;
+            board = start_board;
+            black_reserve = black;
+            white_reserve = white;
+        }
+
+        if (check_is_game_over)
+        {
+            return 0;
+        }
+        if (print_moves)
+        {
+            for (auto move : unique_moves)
+            {
+                char from_x = static_cast<char>(move.from_x + 97);
+                char to_x = static_cast<char>(move.to_x + 97);
+                cout << "DO_MOVE " << from_x << move.from_y + 1 << " " << to_x << move.to_y + 1 << endl;
+            }
+        }
+        return unique_boards.size();
     }
 };
 
 int main(int, char **)
 {
     string input;
-    GipfEngine gipf(4, 4, 15, 15);
+    GipfEngine gipf(2, 4, 15, 15);
 
     while (getline(cin, input))
     {
@@ -721,7 +880,6 @@ int main(int, char **)
         {
             int from_x, from_y, to_x, to_y;
             bool success;
-            // cin >> input;
             from_x = input[8] - 97;
             from_y = input[9] - 49;
             to_x = input[11] - 97;
@@ -745,6 +903,33 @@ int main(int, char **)
         else if (input == "PRINT_GAME_BOARD")
         {
             gipf.printBoard();
+        }
+        else if (input == "GEN_ALL_POS_MOV_NUM")
+        {
+            cout << gipf.count_posible_moves() << "_UNIQUE_MOVES" << endl;
+        }
+        else if (input == "GEN_ALL_POS_MOV")
+        {
+            gipf.count_posible_moves(false, true);
+        }
+        else if (input == "GEN_ALL_POS_MOV_EXT_NUM")
+        {
+            cout << gipf.count_posible_moves(true) << "_UNIQUE_MOVES" << endl;
+        }
+        else if (input == "GEN_ALL_POS_MOV_EXT")
+        {
+            gipf.count_posible_moves(true, true);
+        }
+        else if (input == "IS_GAME_OVER")
+        {
+            if (gipf.is_game_over())
+            {
+                cout << "THE_WINNER_IS_" << gipf.get_winner() << endl;
+            }
+            else
+            {
+                cout << "GAME_IN_PROGRESS" << endl;
+            }
         }
         cout << endl;
     }
